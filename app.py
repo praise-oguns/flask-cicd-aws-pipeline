@@ -12,6 +12,7 @@ HTML_TEMPLATE = """
 <body>
     <h1>Currency Converter- Praise Oguns- 30229350</h1>
     <form method="POST">
+#random comment here
         <input type="number" name="amount" step="0.01" placeholder="Amount" min="0" required>
         <select name="from_currency">
             <option value="GBP">GBP</option>
