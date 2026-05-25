@@ -6,11 +6,11 @@ app = Flask(__name__)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
-<head><title>Currency Converter</title>
+<head><title>Currency Converter - Praise Oguns - 30229350</title>
 <style>body { font-family: Arial; max-width: 600px; margin: 20px auto; }</style>
 </head>
 <body>
-    <h1>Currency Converter</h1>
+    <h1>Currency Converter- Praise Oguns- 30229350</h1>
     <form method="POST">
         <input type="number" name="amount" step="0.01" placeholder="Amount" min="0" required>
         <select name="from_currency">
