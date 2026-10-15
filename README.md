@@ -2,7 +2,7 @@
 
 A small Flask app that converts between GBP, USD and CAD using live exchange rates. The app itself is simple on purpose. The point of this project is how it gets built, packaged and deployed.
 
-The app runs in Docker containers behind an Nginx reverse proxy on an AWS EC2 instance. Jenkins builds and deploys it to the server in one run.
+The app runs in Docker containers behind an Nginx reverse proxy on an AWS EC2 instance. Jenkins redeploys it automatically when I push changes to this repo.
 
 ## How it fits together
 
@@ -13,7 +13,7 @@ Browser --> Nginx (port 80) --> Flask app container (port 5000) --> exchange rat
 Deployment flow:
 
 ```
-Build Now in Jenkins --> pull latest code --> docker compose build and up --> app server
+git push --> Jenkins --> pull latest code --> docker compose build and up --> app server
 ```
 
 ## Tech stack
@@ -64,7 +64,7 @@ Then open http://localhost in your browser. Nginx listens on port 80 and passes 
 
 ## CI/CD with Jenkins
 
-I start the pipeline by clicking Build Now in Jenkins. It pulls the latest code from GitHub, rebuilds the images and restarts the containers on the app server, so I never deploy by hand.
+When I push to `main`, Jenkins automatically pulls the latest code, rebuilds the images and restarts the containers on the app server, so I never deploy by hand.
 
 Pipeline steps:
 
@@ -76,7 +76,6 @@ Jenkins runs on its own EC2 instance, separate from the server that hosts the ap
 
 ## What I would improve next
 
-- Add a GitHub webhook so a push triggers the pipeline automatically.
 - Run the app with Gunicorn instead of Flask's built-in development server.
 - Add the Jenkinsfile to this repo so the pipeline is version controlled.
 - Add HTTPS with a certificate on the Nginx container.
