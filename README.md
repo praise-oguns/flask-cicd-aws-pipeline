@@ -2,7 +2,7 @@
 
 I built this to practise getting code from my laptop to a server without anyone logging in by hand. The app is a small currency converter. The setup around it is the interesting part.
 
-When I push a change to GitHub, Jenkins picks it up and redeploys the app. Terraform builds all the servers, so the whole environment can be created or deleted with one command.
+I originally built this pipeline manually in an AWS Learner Lab, then refactored the whole setup into Terraform on my own AWS account so I wouldn't lose the architecture when the lab expired. Now, when I push a change to GitHub, Jenkins picks it up and redeploys the app automatically. Terraform builds all 13 AWS resources from scratch, so the whole environment can be created or deleted with one command.
 
 ## What the app does
 
@@ -12,91 +12,84 @@ When I push a change to GitHub, Jenkins picks it up and redeploys the app. Terra
 
 ## How it works
 
-```
+```text
 I push to GitHub
       |
 Jenkins (its own EC2 instance) checks the repo every 2 minutes
       |
-Jenkins connects to the app server over SSH
+Jenkins connects to the app server over SSH (via internal VPC private IP)
       |
 The app server pulls the code and rebuilds the containers
       |
 Browser --> Nginx (port 80) --> Flask container (port 5000)
-```
 
-The app runs in Docker Compose with two containers. Nginx is the only one open to the internet. Flask is only reachable through Nginx.
+The app runs in Docker Compose with two containers. Nginx is the only one open to the internet. Flask is only reachable through Nginx.What Terraform buildsA custom VPC with one public subnet, an internet gateway and a route tableTwo Ubuntu 24.04 EC2 instances: one for Jenkins, one for the appSecurity groups: SSH and the Jenkins web page (8080) are only open to my IP, the app server only accepts SSH from the Jenkins security group, and port 80 is open to everyoneAn IAM role and instance profile on the app server that only allows AWS Systems Manager (SSM) accessAn AWS key pair, encrypted disks, and IMDSv2 required on both instancesJenkins runs as a Docker container on its own server. Docker and Git are installed on both servers automatically on boot via user_data startup scripts.Project Screenshots1. Terraform Infrastructure Provisioning & Outputsterraform-applyterraform-output2. Automated CI/CD Pipeline (Jenkins Stage View)3. Live App: Before & After Code PushBefore ChangesAfter Code Push (Live Update)4. Tearing Down the Environment (terraform destroy)
 
-## What Terraform builds
+Files
+app.py                The Flask app
+external.txt          Python dependencies
+Dockerfile            Builds the Flask image
+docker-compose.yml    Runs Flask and Nginx
+nginx/nginx.conf      Nginx reverse proxy config
+Jenkinsfile           The deploy pipeline
+terraform/            Infrastructure as Code (VPC, EC2, IAM, Security Groups)
+screenshots/          Project build and deployment screenshots
 
-- A VPC with one public subnet, an internet gateway and a route table
-- Two Ubuntu 24.04 EC2 instances: one for Jenkins, one for the app
-- Security groups: SSH and the Jenkins web page are only open to my IP, the app server accepts SSH from Jenkins, and port 80 is open to everyone
-- An IAM role on the app server that only allows AWS Systems Manager access
-- Encrypted disks, and IMDSv2 required on both instances
+Run it on your own machine
+You need Docker and Docker Compose
 
-Jenkins runs as a Docker container on its own server. Docker and Git are installed on both servers by a startup script.
-
-## Files
-
-```
-app.py                 The Flask app
-external.txt           Python dependencies
-Dockerfile             Builds the Flask image
-docker-compose.yml     Runs Flask and Nginx
-nginx/nginx.conf       Nginx reverse proxy config
-Jenkinsfile            The deploy pipeline
-terraform/             Infrastructure code
-```
-
-## Run it on your own machine
-
-You need Docker and Docker Compose.
-
-```bash
-git clone https://github.com/praise-oguns/flask-cicd-aws-pipeline.git
+git clone [https://github.com/praise-oguns/flask-cicd-aws-pipeline.git](https://github.com/praise-oguns/flask-cicd-aws-pipeline.git)
 cd flask-cicd-aws-pipeline
 docker compose up --build
-```
 
 Open http://localhost in your browser.
-
-## Build the whole thing on AWS
+Build the whole thing on AWS
 
 You need Terraform, the AWS CLI set up with your credentials, and an SSH key.
 
-1. Create `terraform/terraform.tfvars` with your details:
-   ```
-   my_ip = "YOUR.IP.ADDRESS/32"
-   public_key_path = "C:/Users/you/.ssh/id_ed25519.pub"
-   ```
-2. Build the servers:
-   ```bash
-   cd terraform
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-3. Open the `jenkins_url` that Terraform prints. Unlock Jenkins with the password from `docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword`, install the suggested plugins and the SSH Agent plugin.
-4. Add an SSH credential with the ID `app-server-key` and the username `ubuntu`, using the private key that matches your public key.
-5. Put the `app_private_ip` from Terraform into the `Jenkinsfile`.
-6. Create a Pipeline job from this repo, and tick Poll SCM with `H/2 * * * *`.
-7. Push a change to `app.py` and watch Jenkins deploy it. The app is at the `app_url` that Terraform prints.
+1. Create terraform/terraform.tfvars with your details:
+my_ip           = "YOUR.IP.ADDRESS/32"
+public_key_path = "C:/Users/you/.ssh/id_ed25519.pub"
 
-When you're done, run `terraform destroy` so you don't pay for idle servers.
+2. Build the servers: 
+cd terraform
+terraform init
+terraform plan
+terraform apply
 
-## What I learned
+3. Wait about 3 minutes for the startup scripts to finish, then open the jenkins_url that Terraform prints. Unlock Jenkins with the password from:
+sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
-- The app server only accepts SSH from the Jenkins security group, and that rule only matches private addresses. Jenkins has to connect to the private IP, not the public one.
-- Keeping infrastructure in code means I can delete everything and rebuild it in a few minutes.
-- Polling every 2 minutes lets me keep the Jenkins page locked to my IP. A GitHub webhook would need that port open to the internet.
+Install the suggested plugins and the SSH Agent plugin.
 
-## Next
+    Add an SSH credential with the ID app-server-key and the username ubuntu, using the private key that matches your public key.
 
-- Add tests and run them in the pipeline before it deploys.
-- Add HTTPS to Nginx.
+    Put the app_private_ip from Terraform into the Jenkinsfile and push it to GitHub.
 
-## Author
+    Create a Pipeline job from this repo (branch */main, script path Jenkinsfile), and tick Poll SCM with H/2 * * * *.
+
+    Push a change to app.py and watch Jenkins deploy it within 2 minutes. The app is live at the app_url that Terraform prints.
+
+When you're done, run terraform destroy so you don't pay for idle servers.
+What I learned
+
+    The app server only accepts SSH from the Jenkins security group, and that rule only matches private addresses. Jenkins has to connect to the private IP (10.0.1.x), not the public one.
+
+    Moving the setup from an AWS Learner Lab into Terraform means I own the code for the whole network and can delete everything and rebuild it in a few minutes without paying for idle EC2 time.
+
+    Polling every 2 minutes (H/2 * * * *) lets me keep the Jenkins page locked to my IP. A GitHub webhook would need port 8080 open to external webhook IPs.
+
+Next
+
+    Add unit tests and run them in the pipeline before it deploys.
+
+    Add a domain name and HTTPS (Let's Encrypt) to Nginx.
+
+Author
 
 Praise Oguns
-GitHub: [praise-oguns](https://github.com/praise-oguns)
-LinkedIn: [praise-oguns-17a082240](https://www.linkedin.com/in/praise-oguns-17a082240)
+
+    GitHub: praise-oguns
+
+    LinkedIn: praise-oguns-17a082240
+---
