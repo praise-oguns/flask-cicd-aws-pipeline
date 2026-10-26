@@ -52,11 +52,11 @@ Jenkins runs as a Docker container on its own server. Docker and Git are install
 
 **Before changes**
 
-![Before changes](screenshots/app-before.png)
+![Before changes](screenshots/appview-before-changes.png)
 
 **After code push (live update)**
 
-![After code push](screenshots/app-after.png)
+![After code push](screenshots/appview-after-changes.png)
 
 ### 4. Tearing down the environment (`terraform destroy`)
 
