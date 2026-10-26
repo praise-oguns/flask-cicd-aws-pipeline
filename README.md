@@ -7,7 +7,7 @@ I originally built this pipeline manually in an AWS Learner Lab, then refactored
 ## What the app does
 
 - Converts between GBP, USD and CAD using live exchange rates.
-- Rejects negative amounts and unsupported currencies with a clear message.
+- Rejects negative amounts.
 - Shows an error if the exchange rate service can't be reached.
 
 ## How it works
@@ -24,13 +24,13 @@ The app server pulls the code and rebuilds the containers
 Browser --> Nginx (port 80) --> Flask container (port 5000)
 ```
 
-The app runs in Docker Compose with two containers. Nginx is the only one open to the internet. Flask is only reachable through Nginx.
+The app runs in Docker Compose with two containers. Nginx is the only one that is open to the internet, and Flask is only reachable through Nginx.
 
 ## What Terraform builds
 
 - A custom VPC with one public subnet, an internet gateway and a route table.
-- Two Ubuntu 24.04 EC2 instances: one for Jenkins, one for the app.
-- Security groups: SSH and the Jenkins web page (8080) are only open to my IP, the app server only accepts SSH from the Jenkins security group, and port 80 is open to everyone.
+- Two Ubuntu EC2 instances: one for Jenkins, one for the app.
+- Security groups: SSH and the Jenkins web page (8080) are only open to my IP, the app server only accepts SSH from the Jenkins security group, and port 80 is public facing,  open to everyone.
 - An IAM role and instance profile on the app server that only allows AWS Systems Manager (SSM) access.
 - An AWS key pair, encrypted disks, and IMDSv2 required on both instances.
 
@@ -75,9 +75,9 @@ terraform/             Infrastructure as Code (VPC, EC2, IAM, Security Groups)
 screenshots/           Project build and deployment screenshots
 ```
 
-## Run it on your own machine
+## How to run it on your own machine
 
-You need Docker and Docker Compose.
+You will need to have Docker and Docker Compose.
 
 ```bash
 git clone https://github.com/praise-oguns/flask-cicd-aws-pipeline.git
@@ -160,10 +160,10 @@ Remember to destroy the environment when you're finished so you don't pay for id
 - Moving the setup from an AWS Learner Lab into Terraform means I own the code for the whole network and can delete everything and rebuild it in a few minutes without paying for idle EC2 time.
 - Polling every 2 minutes (`H/2 * * * *`) lets me keep the Jenkins page locked to my IP. A GitHub webhook would need inbound access for webhook deliveries from GitHub, which would require changing the current access rules.
 
-## Next
+## Changes to make in future
 
 - Add unit tests and run them in the pipeline before it deploys.
-- Add a domain name and HTTPS (Let's Encrypt) to Nginx.
+- Add a domain name and HTTPS to Nginx.
 
 ## Author
 
