@@ -171,4 +171,4 @@ Praise Oguns
 
 GitHub: [praise-oguns](https://github.com/praise-oguns)
 
-LinkedIn: [praise-oguns-17a082240](https://www.linkedin.com/in/praise-oguns-17a082240)
+LinkedIn: [Praise Oguns](www.linkedin.com/in/praise-oguns)
