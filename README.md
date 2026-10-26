@@ -1,50 +1,56 @@
-# Flask Currency Converter: CI/CD Pipeline on AWS EC2
+# Flask Currency Converter on AWS with Jenkins and Terraform
 
-A small Flask app that converts between GBP, USD and CAD using live exchange rates. The app itself is simple on purpose. The point of this project is how it gets built, packaged and deployed.
+I built this to practise getting code from my laptop to a server without anyone logging in by hand. The app is a small currency converter. The setup around it is the interesting part.
 
-The app runs in Docker containers behind an Nginx reverse proxy on an AWS EC2 instance. Jenkins redeploys it automatically when I push changes to this repo.
+When I push a change to GitHub, Jenkins picks it up and redeploys the app. Terraform builds all the servers, so the whole environment can be created or deleted with one command.
 
-## How it fits together
+## What the app does
+
+- Converts between GBP, USD and CAD using live exchange rates.
+- Rejects negative amounts and unsupported currencies with a clear message.
+- Shows an error if the exchange rate service can't be reached.
+
+## How it works
 
 ```
-Browser --> Nginx (port 80) --> Flask app container (port 5000) --> exchange rate API
+I push to GitHub
+      |
+Jenkins (its own EC2 instance) checks the repo every 2 minutes
+      |
+Jenkins connects to the app server over SSH
+      |
+The app server pulls the code and rebuilds the containers
+      |
+Browser --> Nginx (port 80) --> Flask container (port 5000)
 ```
 
-Deployment flow:
+The app runs in Docker Compose with two containers. Nginx is the only one open to the internet. Flask is only reachable through Nginx.
+
+## What Terraform builds
+
+- A VPC with one public subnet, an internet gateway and a route table
+- Two Ubuntu 24.04 EC2 instances: one for Jenkins, one for the app
+- Security groups: SSH and the Jenkins web page are only open to my IP, the app server accepts SSH from Jenkins, and port 80 is open to everyone
+- An IAM role on the app server that only allows AWS Systems Manager access
+- Encrypted disks, and IMDSv2 required on both instances
+
+Jenkins runs as a Docker container on its own server. Docker and Git are installed on both servers by a startup script.
+
+## Files
 
 ```
-git push --> Jenkins --> pull latest code --> docker compose build and up --> app server
+app.py                 The Flask app
+external.txt           Python dependencies
+Dockerfile             Builds the Flask image
+docker-compose.yml     Runs Flask and Nginx
+nginx/nginx.conf       Nginx reverse proxy config
+Jenkinsfile            The deploy pipeline
+terraform/             Infrastructure code
 ```
 
-## Tech stack
+## Run it on your own machine
 
-- Python 3.11 and Flask
-- Docker and Docker Compose
-- Nginx as a reverse proxy
-- Jenkins for CI/CD
-- AWS EC2 for hosting
-- Bash for server setup
-
-## What's in this repo
-
-| File | What it does |
-| --- | --- |
-| `app.py` | The Flask app. Takes an amount and two currencies, checks the input, fetches live rates and shows the result. |
-| `external.txt` | Python dependencies, installed during the image build. |
-| `Dockerfile` | Builds the Flask image from `python:3.11-slim`. |
-| `docker-compose.yml` | Runs two containers: `flask-app` (port 5000, internal only) and `nginx-proxy` (port 80, public). |
-| `nginx/nginx.conf` | Nginx config that forwards requests to the Flask container. |
-
-## The app
-
-- Supports GBP, USD and CAD.
-- Rejects negative amounts and unsupported currencies with a clear error message.
-- Pulls live rates from the free ExchangeRate-API endpoint.
-- Shows an error message if the rates can't be fetched.
-
-## Run it locally
-
-You need Docker and Docker Compose installed.
+You need Docker and Docker Compose.
 
 ```bash
 git clone https://github.com/praise-oguns/flask-cicd-aws-pipeline.git
@@ -52,35 +58,42 @@ cd flask-cicd-aws-pipeline
 docker compose up --build
 ```
 
-Then open http://localhost in your browser. Nginx listens on port 80 and passes traffic to Flask.
+Open http://localhost in your browser.
 
-## Deploy on AWS EC2
+## Build the whole thing on AWS
 
-1. Launch an EC2 instance (Ubuntu).
-2. In the security group, allow port 80 from anywhere and port 22 from your own IP only.
-3. Install Docker and Docker Compose on the instance.
-4. Clone this repo and run `docker compose up -d --build`.
-5. Visit the instance's public IP in a browser.
+You need Terraform, the AWS CLI set up with your credentials, and an SSH key.
 
-## CI/CD with Jenkins
+1. Create `terraform/terraform.tfvars` with your details:
+   ```
+   my_ip = "YOUR.IP.ADDRESS/32"
+   public_key_path = "C:/Users/you/.ssh/id_ed25519.pub"
+   ```
+2. Build the servers:
+   ```bash
+   cd terraform
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+3. Open the `jenkins_url` that Terraform prints. Unlock Jenkins with the password from `docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword`, install the suggested plugins and the SSH Agent plugin.
+4. Add an SSH credential with the ID `app-server-key` and the username `ubuntu`, using the private key that matches your public key.
+5. Put the `app_private_ip` from Terraform into the `Jenkinsfile`.
+6. Create a Pipeline job from this repo, and tick Poll SCM with `H/2 * * * *`.
+7. Push a change to `app.py` and watch Jenkins deploy it. The app is at the `app_url` that Terraform prints.
 
-When I push to `main`, Jenkins automatically pulls the latest code, rebuilds the images and restarts the containers on the app server, so I never deploy by hand.
+When you're done, run `terraform destroy` so you don't pay for idle servers.
 
-Pipeline steps:
+## What I learned
 
-1. Check out the latest code from GitHub
-2. Build the images with Docker Compose
-3. Connect to the app server and restart the containers there
+- The app server only accepts SSH from the Jenkins security group, and that rule only matches private addresses. Jenkins has to connect to the private IP, not the public one.
+- Keeping infrastructure in code means I can delete everything and rebuild it in a few minutes.
+- Polling every 2 minutes lets me keep the Jenkins page locked to my IP. A GitHub webhook would need that port open to the internet.
 
-Jenkins runs on its own EC2 instance, separate from the server that hosts the app.
+## Next
 
-## What I would improve next
-
-- Run the app with Gunicorn instead of Flask's built-in development server.
-- Add the Jenkinsfile to this repo so the pipeline is version controlled.
-- Add HTTPS with a certificate on the Nginx container.
-- Add basic tests and run them in the pipeline before deploying.
-- Add a request timeout and error handling around the exchange rate call.
+- Add tests and run them in the pipeline before it deploys.
+- Add HTTPS to Nginx.
 
 ## Author
 
